@@ -252,7 +252,7 @@ func (session *RMQ_Session) init(conn *amqp.Connection) error {
 	if session.params.Consumer != nil {
 		fmt.Printf("%+v\n", session.params.Consumer)
 		for {
-			messages, err := rmq.Stream()
+			messages, err := Stream()
 			if err == nil {
 				fmt.Println("Consumer ready")
 				go func() {
