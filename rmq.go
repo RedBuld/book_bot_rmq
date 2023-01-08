@@ -20,7 +20,6 @@ type RMQ_Session struct {
 	notifyChanClose chan *amqp.Error
 	notifyConfirm   chan amqp.Confirmation
 	isReady         bool
-	consumerActive  bool
 }
 
 type RMQ_Message struct {
@@ -249,7 +248,6 @@ func (session *RMQ_Session) init(conn *amqp.Connection) error {
 	session.isReady = true
 
 	if session.params.Consumer != nil {
-		session.logger.Printf("%+v\n", session.params.Consumer)
 		for {
 			messages, err := session.Stream()
 			if err == nil {
