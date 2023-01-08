@@ -2,7 +2,7 @@
 RabbitMQ for Book Bot
 
 пример использования
-
+```
 	func (DC *DownloadCenter) initRMQ() {
 		rmq_params := &bbr.RMQ_Params{
 			Server: "amqp://guest:guest@localhost:5672/",
@@ -50,3 +50,4 @@ RabbitMQ for Book Bot
 
 		fmt.Println("Sended download status")
 	}
+```
