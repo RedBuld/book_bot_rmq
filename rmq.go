@@ -3,7 +3,6 @@ package book_bot_rmq
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log"
 	"os"
 	"time"
@@ -90,7 +89,7 @@ func NewRMQ(params *RMQ_Params) *RMQ_Session {
 		logger: log.New(os.Stdout, "", log.LstdFlags),
 		done:   make(chan bool),
 	}
-	fmt.Println("Starting connection")
+	session.logger.Println("Starting connection")
 	go session.handleReconnect()
 	return &session
 }
@@ -100,12 +99,12 @@ func NewRMQ(params *RMQ_Params) *RMQ_Session {
 func (session *RMQ_Session) handleReconnect() {
 	for {
 		session.isReady = false
-		fmt.Println("Attempting to connect")
+		session.logger.Println("Attempting to connect")
 
 		conn, err := session.connect()
 
 		if err != nil {
-			fmt.Println("Failed to connect. Retrying...")
+			session.logger.Println("Failed to connect. Retrying...")
 
 			select {
 			case <-session.done:
@@ -130,7 +129,7 @@ func (session *RMQ_Session) connect() (*amqp.Connection, error) {
 	}
 
 	session.changeConnection(conn)
-	fmt.Println("Connected!")
+	session.logger.Println("Connected!")
 	return conn, nil
 }
 
@@ -143,7 +142,7 @@ func (session *RMQ_Session) handleReInit(conn *amqp.Connection) bool {
 		err := session.init(conn)
 
 		if err != nil {
-			fmt.Printf("Failed to initialize channel. Retrying... %+v\n", err)
+			session.logger.Printf("Failed to initialize channel. Retrying... %+v\n", err)
 
 			select {
 			case <-session.done:
@@ -157,10 +156,10 @@ func (session *RMQ_Session) handleReInit(conn *amqp.Connection) bool {
 		case <-session.done:
 			return true
 		case <-session.notifyConnClose:
-			fmt.Println("Connection closed. Reconnecting...")
+			session.logger.Println("Connection closed. Reconnecting...")
 			return false
 		case <-session.notifyChanClose:
-			fmt.Println("Channel closed. Re-running init...")
+			session.logger.Println("Channel closed. Re-running init...")
 		}
 	}
 }
@@ -171,13 +170,13 @@ func (session *RMQ_Session) init(conn *amqp.Connection) error {
 	if err != nil {
 		return err
 	}
-	fmt.Println("RMQ channel created")
+	session.logger.Println("RMQ channel created")
 
 	err = ch.Confirm(false)
 	if err != nil {
 		return err
 	}
-	fmt.Println("RMQ channel confirm set")
+	session.logger.Println("RMQ channel confirm set")
 
 	if session.params.Queue != nil {
 		if session.params.Queue.Name == "" {
@@ -197,7 +196,7 @@ func (session *RMQ_Session) init(conn *amqp.Connection) error {
 	if err != nil {
 		return err
 	}
-	fmt.Println("RMQ queue declared")
+	session.logger.Println("RMQ queue declared")
 
 	if session.params.Prefetch != nil {
 		err = ch.Qos(
@@ -208,7 +207,7 @@ func (session *RMQ_Session) init(conn *amqp.Connection) error {
 		if err != nil {
 			return err
 		}
-		fmt.Println("RMQ QoS set")
+		session.logger.Println("RMQ QoS set")
 	}
 
 	if session.params.Exchange != nil {
@@ -231,7 +230,7 @@ func (session *RMQ_Session) init(conn *amqp.Connection) error {
 		if err != nil {
 			return err
 		}
-		fmt.Println("RMQ " + session.params.Exchange.Name + " exchange declared")
+		session.logger.Println("RMQ " + session.params.Exchange.Name + " exchange declared")
 
 		err = ch.QueueBind(
 			session.params.Queue.Name,          // queue name
@@ -243,18 +242,18 @@ func (session *RMQ_Session) init(conn *amqp.Connection) error {
 		if err != nil {
 			panic(err)
 		}
-		fmt.Println("RMQ binded queue to exchange " + session.params.Exchange.Name)
+		session.logger.Println("RMQ binded queue to exchange " + session.params.Exchange.Name)
 	}
 
 	session.changeChannel(ch)
 	session.isReady = true
 
 	if session.params.Consumer != nil {
-		fmt.Printf("%+v\n", session.params.Consumer)
+		session.logger.Printf("%+v\n", session.params.Consumer)
 		for {
 			messages, err := session.Stream()
 			if err == nil {
-				fmt.Println("Consumer ready")
+				session.logger.Println("Consumer ready")
 				go func() {
 					for message := range messages {
 						session.params.Consumer(message)
@@ -265,7 +264,7 @@ func (session *RMQ_Session) init(conn *amqp.Connection) error {
 		}
 	}
 
-	fmt.Println("Setup!")
+	session.logger.Println("Setup!")
 
 	return nil
 }
@@ -301,7 +300,7 @@ func (session *RMQ_Session) Push(message *RMQ_Message) error {
 		err := session.UnsafePush(message)
 		if err != nil {
 			session.logger.Println("Push failed. Retrying...")
-			fmt.Println("Push failed. Retrying...")
+			session.logger.Println("Push failed. Retrying...")
 			select {
 			case <-session.done:
 				return errShutdown
@@ -313,13 +312,13 @@ func (session *RMQ_Session) Push(message *RMQ_Message) error {
 		case confirm := <-session.notifyConfirm:
 			if confirm.Ack {
 				session.logger.Println("Push confirmed!")
-				fmt.Println("Push confirmed!")
+				session.logger.Println("Push confirmed!")
 				return nil
 			}
 		case <-time.After(resendDelay):
 		}
 		session.logger.Println("Push didn't confirm. Retrying...")
-		fmt.Println("Push didn't confirm. Retrying...")
+		session.logger.Println("Push didn't confirm. Retrying...")
 	}
 }
 
