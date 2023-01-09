@@ -280,7 +280,6 @@ func (session *RMQ_Session) Push(message *RMQ_Message) error {
 		err := session.UnsafePush(message)
 		if err != nil {
 			session.logger.Println("Push failed. Retrying...")
-			session.logger.Println("Push failed. Retrying...")
 			select {
 			case <-session.done:
 				return errShutdown
@@ -292,12 +291,10 @@ func (session *RMQ_Session) Push(message *RMQ_Message) error {
 		case confirm := <-session.notifyConfirm:
 			if confirm.Ack {
 				session.logger.Println("Push confirmed!")
-				session.logger.Println("Push confirmed!")
 				return nil
 			}
 		case <-time.After(resendDelay):
 		}
-		session.logger.Println("Push didn't confirm. Retrying...")
 		session.logger.Println("Push didn't confirm. Retrying...")
 	}
 }
