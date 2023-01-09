@@ -75,35 +75,34 @@ const (
 )
 
 var (
-	errNotConnected  = errors.New("not connected to a server")
-	errAlreadyClosed = errors.New("already closed: not connected to the server")
-	errShutdown      = errors.New("session is shutting down")
+	errNotConnected   = errors.New("not connected to a server")
+	errAlreadyClosed  = errors.New("already closed: not connected to the server")
+	errShutdown       = errors.New("session is shutting down")
+	errNoQueueName    = errors.New("no queue name provided")
+	errNoQueueParams  = errors.New("no queue params provided")
+	errNoExchangeName = errors.New("no exchange name provided")
 )
 
-// New creates a new consumer state instance, and automatically
-// attempts to connect to the server.
 func NewRMQ(params *RMQ_Params) *RMQ_Session {
 	session := RMQ_Session{
 		params: params,
 		logger: log.New(os.Stdout, "", log.LstdFlags),
 		done:   make(chan bool),
 	}
-	session.logger.Println("Starting connection")
+	session.logger.Println("RMQ starting connection")
 	go session.handleReconnect()
 	return &session
 }
 
-// handleReconnect will wait for a connection error on
-// notifyConnClose, and then continuously attempt to reconnect.
 func (session *RMQ_Session) handleReconnect() {
 	for {
 		session.isReady = false
-		session.logger.Println("Attempting to connect")
+		session.logger.Println("RMQ attempting to connect")
 
 		conn, err := session.connect()
 
 		if err != nil {
-			session.logger.Println("Failed to connect. Retrying...")
+			session.logger.Printf("RMQ Error: %+v\n", err)
 
 			select {
 			case <-session.done:
@@ -119,7 +118,6 @@ func (session *RMQ_Session) handleReconnect() {
 	}
 }
 
-// connect will create a new AMQP connection
 func (session *RMQ_Session) connect() (*amqp.Connection, error) {
 	conn, err := amqp.Dial(session.params.Server)
 
@@ -128,12 +126,10 @@ func (session *RMQ_Session) connect() (*amqp.Connection, error) {
 	}
 
 	session.changeConnection(conn)
-	session.logger.Println("Connected!")
+	session.logger.Println("RMQ connected!")
 	return conn, nil
 }
 
-// handleReconnect will wait for a channel error
-// and then continuously attempt to re-initialize both channels
 func (session *RMQ_Session) handleReInit(conn *amqp.Connection) bool {
 	for {
 		session.isReady = false
@@ -141,7 +137,7 @@ func (session *RMQ_Session) handleReInit(conn *amqp.Connection) bool {
 		err := session.init(conn)
 
 		if err != nil {
-			session.logger.Printf("Failed to initialize channel. Retrying... %+v\n", err)
+			session.logger.Printf("RMQ Error: %+v\n", err)
 
 			select {
 			case <-session.done:
@@ -155,15 +151,14 @@ func (session *RMQ_Session) handleReInit(conn *amqp.Connection) bool {
 		case <-session.done:
 			return true
 		case <-session.notifyConnClose:
-			session.logger.Println("Connection closed. Reconnecting...")
+			session.logger.Println("RMQ connection closed. Reconnecting...")
 			return false
 		case <-session.notifyChanClose:
-			session.logger.Println("Channel closed. Re-running init...")
+			session.logger.Println("RMQ channel closed. Re-running init...")
 		}
 	}
 }
 
-// init will initialize channel & declare queue
 func (session *RMQ_Session) init(conn *amqp.Connection) error {
 	ch, err := conn.Channel()
 	if err != nil {
@@ -179,7 +174,7 @@ func (session *RMQ_Session) init(conn *amqp.Connection) error {
 
 	if session.params.Queue != nil {
 		if session.params.Queue.Name == "" {
-			return errors.New("no queue name provided")
+			return errNoQueueName
 		}
 		_, err = ch.QueueDeclare(
 			session.params.Queue.Name,      // name
@@ -190,7 +185,7 @@ func (session *RMQ_Session) init(conn *amqp.Connection) error {
 			nil,                            // arguments
 		)
 	} else {
-		return errors.New("no queue params provided")
+		return errNoQueueParams
 	}
 	if err != nil {
 		return err
@@ -211,10 +206,9 @@ func (session *RMQ_Session) init(conn *amqp.Connection) error {
 
 	if session.params.Exchange != nil {
 		if session.params.Exchange.Name == "" {
-			return errors.New("no exchange name provided")
+			return errNoExchangeName
 		}
 		if session.params.Exchange.Mode == "" {
-			// return errors.New("no exchange mode provided")
 			session.params.Exchange.Mode = "direct"
 		}
 		err = ch.ExchangeDeclare(
@@ -251,7 +245,7 @@ func (session *RMQ_Session) init(conn *amqp.Connection) error {
 		for {
 			messages, err := session.Stream()
 			if err == nil {
-				session.logger.Println("Consumer ready")
+				session.logger.Println("RMQ consumer ready")
 				go func() {
 					for message := range messages {
 						session.params.Consumer(message)
@@ -262,21 +256,17 @@ func (session *RMQ_Session) init(conn *amqp.Connection) error {
 		}
 	}
 
-	session.logger.Println("Setup!")
+	session.logger.Println("RMQ setup!")
 
 	return nil
 }
 
-// changeConnection takes a new connection to the queue,
-// and updates the close listener to reflect this.
 func (session *RMQ_Session) changeConnection(connection *amqp.Connection) {
 	session.connection = connection
 	session.notifyConnClose = make(chan *amqp.Error)
 	session.connection.NotifyClose(session.notifyConnClose)
 }
 
-// changeChannel takes a new channel to the queue,
-// and updates the channel listeners to reflect this.
 func (session *RMQ_Session) changeChannel(channel *amqp.Channel) {
 	session.channel = channel
 	session.notifyChanClose = make(chan *amqp.Error)
@@ -285,15 +275,7 @@ func (session *RMQ_Session) changeChannel(channel *amqp.Channel) {
 	session.channel.NotifyPublish(session.notifyConfirm)
 }
 
-// Push will push data onto the queue, and wait for a confirm.
-// If no confirms are received until within the resendTimeout,
-// it continuously re-sends messages until a confirm is received.
-// This will block until the server sends a confirm. Errors are
-// only returned if the push action itself fails, see UnsafePush.
 func (session *RMQ_Session) Push(message *RMQ_Message) error {
-	// if !session.isReady {
-	// 	return errors.New("failed to push push: not connected")
-	// }
 	for {
 		err := session.UnsafePush(message)
 		if err != nil {
@@ -320,10 +302,6 @@ func (session *RMQ_Session) Push(message *RMQ_Message) error {
 	}
 }
 
-// UnsafePush will push to the queue without checking for
-// confirmation. It returns an error if it fails to connect.
-// No guarantees are provided for whether the server will
-// recieve the message.
 func (session *RMQ_Session) UnsafePush(message *RMQ_Message) error {
 	if !session.isReady {
 		return errNotConnected
@@ -340,10 +318,6 @@ func (session *RMQ_Session) UnsafePush(message *RMQ_Message) error {
 	)
 }
 
-// Stream will continuously put queue items on the channel.
-// It is required to call delivery.Ack when it has been
-// successfully processed, or delivery.Nack when it fails.
-// Ignoring this will cause data to build up on the server.
 func (session *RMQ_Session) Stream() (<-chan amqp.Delivery, error) {
 	if !session.isReady {
 		return nil, errNotConnected
@@ -359,7 +333,6 @@ func (session *RMQ_Session) Stream() (<-chan amqp.Delivery, error) {
 	)
 }
 
-// Close will cleanly shutdown the channel and connection.
 func (session *RMQ_Session) Close() error {
 	if !session.isReady {
 		return errAlreadyClosed
