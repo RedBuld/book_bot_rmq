@@ -7,6 +7,7 @@ package main
 
 import (
     bbr "github.com/RedBuld/book_bot_rmq"
+    amqp "github.com/rabbitmq/amqp091-go"
 )
 
 func main() {
