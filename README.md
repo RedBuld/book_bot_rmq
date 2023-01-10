@@ -3,13 +3,18 @@ RabbitMQ for Book Bot
 
 пример использования
 ```
-func (DC *DownloadCenter) initRMQ() {
+package main
+
+import (
+    bbr "github.com/RedBuld/book_bot_rmq"
+)
+
+func main() {
 	rmq_params := &bbr.RMQ_Params{
 		Server: "amqp://guest:guest@localhost:5672/",
 		Queue: &bbr.RMQ_Params_Queue{
 			Name:    "elib_fb2_downloads",
 			Durable: true,
-			// AutoAck: true,
 		},
 		Exchange: &bbr.RMQ_Params_Exchange{
 			Name:       "download_requests",
@@ -22,14 +27,21 @@ func (DC *DownloadCenter) initRMQ() {
 			Size:   0,
 			Global: false,
 		},
-		Consumer: DC.onMessage,
+		Consumer: onMessage,
 	}
 	rmq := bbr.NewRMQ(rmq_params)
 	defer rmq.Close()
 
 	DC.rmq = rmq
 }
-func (DC *DownloadCenter) SendStatus(RoutingKey string) {
+
+func onMessage(message amqp.Delivery) {
+	fmt.Printf("[%s] Message [%s]: %s\n", time.Now(), message.RoutingKey, message.Body)
+	message.Ack(false)
+	SendStatus(message.RoutingKey)
+}
+
+func SendStatus(RoutingKey string) {
 	fmt.Println("Sending download status")
 
 	message := &bbr.RMQ_Message{
