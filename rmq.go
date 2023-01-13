@@ -31,36 +31,36 @@ type RMQ_Message struct {
 }
 
 type RMQ_Params struct {
-	Server   string
-	Queue    *RMQ_Params_Queue
-	Exchange *RMQ_Params_Exchange
-	Prefetch *RMQ_Params_Prefetch
+	Server   string               `json:"server" yaml:"server"`
+	Queue    *RMQ_Params_Queue    `json:"queue" yaml:"queue"`
+	Exchange *RMQ_Params_Exchange `json:"exchange" yaml:"exchange"`
+	Prefetch *RMQ_Params_Prefetch `json:"prefetch" yaml:"prefetch"`
 	Consumer func(amqp.Delivery)
 }
 
 type RMQ_Params_Queue struct {
-	Name      string
-	Durable   bool
-	Delete    bool
-	Exclusive bool
-	NoLocal   bool
-	NoWait    bool
-	AutoAck   bool
+	Name      string `json:"name" yaml:"name"`
+	Durable   bool   `json:"durable" yaml:"durable"`
+	Delete    bool   `json:"delete" yaml:"delete"`
+	Exclusive bool   `json:"exclusive" yaml:"exclusive"`
+	NoLocal   bool   `json:"no_local" yaml:"no_local"`
+	NoWait    bool   `json:"no_wait" yaml:"no_wait"`
+	AutoAck   bool   `json:"auto_ack" yaml:"auto_ack"`
 }
 
 type RMQ_Params_Prefetch struct {
-	Count  int
-	Size   int
-	Global bool
+	Count  int  `json:"count" yaml:"count"`
+	Size   int  `json:"size" yaml:"size"`
+	Global bool `json:"global" yaml:"global"`
 }
 
 type RMQ_Params_Exchange struct {
-	Name       string
-	Mode       string
-	Durable    bool
-	Delete     bool
-	NoWait     bool
-	RoutingKey string
+	Name       string `json:"name" yaml:"name"`
+	Mode       string `json:"mode" yaml:"mode"`
+	Durable    bool   `json:"durable" yaml:"durable"`
+	Delete     bool   `json:"delete" yaml:"delete"`
+	NoWait     bool   `json:"no_wait" yaml:"no_wait"`
+	RoutingKey string `json:"routing_key" yaml:"routing_key"`
 }
 
 const (
